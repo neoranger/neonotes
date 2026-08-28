@@ -21,7 +21,7 @@ services:
     container_name: neonotes-frontend
     restart: unless-stopped
     ports:
-      - "4000:80"
+      - "4500:80"
     depends_on:
       - backend
 
