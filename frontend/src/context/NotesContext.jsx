@@ -2,8 +2,10 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useAuth } from './AuthContext';
 import { getLocalFolders, saveLocalFolder, getLocalNotes, saveLocalNote } from '../services/db';
 import { performSync } from '../services/syncEngine';
+import { generateUUID } from '../utils/uuid';
 
 const NotesContext = createContext();
+const GUEST_USER_ID = 'guest_local_user';
 
 export function NotesProvider({ children }) {
   const { user } = useAuth();
@@ -15,11 +17,13 @@ export function NotesProvider({ children }) {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [syncStatus, setSyncStatus] = useState('idle');
 
+  const currentUserId = user ? user.id : GUEST_USER_ID;
+
   // Monitor de estado de conexión a red
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      triggerSync();
+      if (user) triggerSync();
     };
     const handleOffline = () => setIsOnline(false);
 
@@ -32,16 +36,24 @@ export function NotesProvider({ children }) {
     };
   }, [user]);
 
-  // Carga inicial de datos desde IndexedDB
+  // Carga inicial de datos desde IndexedDB (Soporta usuario autenticado o invitado local)
   const loadLocalData = useCallback(async () => {
-    if (!user) {
-      setFolders([]);
-      setNotes([]);
-      setActiveNoteId(null);
-      return;
+    const targetId = user ? user.id : GUEST_USER_ID;
+    
+    // Migrar elementos locales creados en modo invitado al usuario recién autenticado
+    if (user) {
+      const guestFolders = await getLocalFolders(GUEST_USER_ID);
+      for (const gf of guestFolders) {
+        await saveLocalFolder({ ...gf, user_id: user.id, updated_at: Date.now() });
+      }
+      const guestNotes = await getLocalNotes(GUEST_USER_ID);
+      for (const gn of guestNotes) {
+        await saveLocalNote({ ...gn, user_id: user.id, updated_at: Date.now() });
+      }
     }
-    const localF = await getLocalFolders(user.id);
-    const localN = await getLocalNotes(user.id);
+
+    const localF = await getLocalFolders(targetId);
+    const localN = await getLocalNotes(targetId);
     setFolders(localF);
     setNotes(localN);
 
@@ -68,7 +80,7 @@ export function NotesProvider({ children }) {
   // Inicializar datos cuando el usuario cambia
   useEffect(() => {
     loadLocalData().then(() => {
-      if (navigator.onLine) {
+      if (user && navigator.onLine) {
         triggerSync();
       }
     });
@@ -76,10 +88,9 @@ export function NotesProvider({ children }) {
 
   // Operaciones de Carpetas
   const createFolder = async (name, parentId = null, color = '#6366f1') => {
-    if (!user) return;
     const newFolder = {
-      id: crypto.randomUUID(),
-      user_id: user.id,
+      id: generateUUID(),
+      user_id: currentUserId,
       name,
       parent_id: parentId,
       color,
@@ -92,11 +103,10 @@ export function NotesProvider({ children }) {
     setFolders(prev => [...prev, newFolder]);
     setActiveFolderId(newFolder.id);
 
-    if (navigator.onLine) triggerSync();
+    if (user && navigator.onLine) triggerSync();
   };
 
   const deleteFolder = async (folderId) => {
-    if (!user) return;
     const folder = folders.find(f => f.id === folderId);
     if (!folder) return;
 
@@ -114,15 +124,14 @@ export function NotesProvider({ children }) {
     setNotes(prev => prev.map(n => (n.folder_id === folderId ? { ...n, folder_id: null } : n)));
     if (activeFolderId === folderId) setActiveFolderId(null);
 
-    if (navigator.onLine) triggerSync();
+    if (user && navigator.onLine) triggerSync();
   };
 
   // Operaciones de Notas
   const createNote = async (title = 'Nueva Nota', content = '', folderId = activeFolderId) => {
-    if (!user) return;
     const newNote = {
-      id: crypto.randomUUID(),
-      user_id: user.id,
+      id: generateUUID(),
+      user_id: currentUserId,
       folder_id: folderId,
       title,
       content,
@@ -137,22 +146,21 @@ export function NotesProvider({ children }) {
     setNotes(prev => [newNote, ...prev]);
     setActiveNoteId(newNote.id);
 
-    if (navigator.onLine) triggerSync();
+    if (user && navigator.onLine) triggerSync();
     return newNote;
   };
 
-  // Timer para diferir la sincronización de red en segundo plano (2.5s después de dejar de escribir)
+  // Timer para diferir la sincronización de red en segundo plano
   const debouncedSyncRef = useRef(null);
   const scheduleSync = useCallback(() => {
-    if (!navigator.onLine) return;
+    if (!user || !navigator.onLine) return;
     if (debouncedSyncRef.current) clearTimeout(debouncedSyncRef.current);
     debouncedSyncRef.current = setTimeout(() => {
       triggerSync();
     }, 2500);
-  }, [triggerSync]);
+  }, [user, triggerSync]);
 
   const updateNote = async (noteId, updates) => {
-    if (!user) return;
     const existing = notes.find(n => n.id === noteId);
     if (!existing) return;
 
@@ -169,7 +177,6 @@ export function NotesProvider({ children }) {
   };
 
   const deleteNote = async (noteId) => {
-    if (!user) return;
     const existing = notes.find(n => n.id === noteId);
     if (!existing) return;
 
@@ -183,7 +190,7 @@ export function NotesProvider({ children }) {
       setActiveNoteId(remainingNotes.length > 0 ? remainingNotes[0].id : null);
     }
 
-    if (navigator.onLine) triggerSync();
+    if (user && navigator.onLine) triggerSync();
   };
 
   // Filtrado de Notas por carpeta y búsqueda

@@ -20,10 +20,6 @@ export default function NotesList({ onOpenAuth }) {
   const folderTitle = currentFolder ? currentFolder.name : 'Todas las Notas';
 
   const handleCreateNote = () => {
-    if (!user) {
-      onOpenAuth();
-      return;
-    }
     createNote('Nueva Nota Markdown', '# Título de la nota\n\nComienza a escribir en Markdown aquí...', activeFolderId);
   };
 

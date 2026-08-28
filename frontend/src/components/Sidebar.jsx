@@ -54,15 +54,13 @@ export default function Sidebar({ onOpenAuth, onOpenNewFolder }) {
       <div className="sidebar-section">
         <div className="sidebar-section-title">
           <span>Carpetas</span>
-          {user && (
-            <button
-              className="toolbar-btn"
-              onClick={onOpenNewFolder}
-              title="Nueva Carpeta"
-            >
-              <FolderPlus size={16} />
-            </button>
-          )}
+          <button
+            className="toolbar-btn"
+            onClick={onOpenNewFolder}
+            title="Nueva Carpeta"
+          >
+            <FolderPlus size={16} />
+          </button>
         </div>
 
         <div className="folder-tree">
