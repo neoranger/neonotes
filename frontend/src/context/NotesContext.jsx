@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
-import { getLocalFolders, saveLocalFolder, getLocalNotes, saveLocalNote } from '../services/db';
+import { getLocalFolders, saveLocalFolder, getLocalNotes, saveLocalNote, initLocalDB } from '../services/db';
 import { performSync } from '../services/syncEngine';
 import { generateUUID } from '../utils/uuid';
 
@@ -16,6 +16,11 @@ export function NotesProvider({ children }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [syncStatus, setSyncStatus] = useState('idle');
+
+  const activeNoteIdRef = useRef(activeNoteId);
+  useEffect(() => {
+    activeNoteIdRef.current = activeNoteId;
+  }, [activeNoteId]);
 
   const currentUserId = user ? user.id : GUEST_USER_ID;
 
@@ -36,23 +41,26 @@ export function NotesProvider({ children }) {
     };
   }, [user]);
 
-  // Carga inicial de datos desde IndexedDB (Soporta usuario autenticado o invitado local)
+  // Carga inicial de datos desde IndexedDB
   const loadLocalData = useCallback(async () => {
     const targetId = user ? user.id : GUEST_USER_ID;
     
-    // Migrar elementos locales creados en modo invitado o sin asignación al usuario autenticado
+    // Adopción inteligente: Si el usuario no tiene notas locales pero existen notas en este navegador, adoptarlas
     if (user) {
       const db = await initLocalDB();
       const allFolders = await db.getAll('folders');
       const allNotes = await db.getAll('notes');
 
+      const userNotesExist = allNotes.some(n => n.user_id === user.id && !n.is_deleted);
+      const shouldAdoptAll = !userNotesExist && allNotes.length > 0;
+
       for (const gf of allFolders) {
-        if (!gf.user_id || gf.user_id === GUEST_USER_ID || gf.user_id === 'undefined') {
+        if (shouldAdoptAll || !gf.user_id || gf.user_id === GUEST_USER_ID || gf.user_id === 'undefined') {
           await saveLocalFolder({ ...gf, user_id: user.id, updated_at: Date.now() });
         }
       }
       for (const gn of allNotes) {
-        if (!gn.user_id || gn.user_id === GUEST_USER_ID || gn.user_id === 'undefined') {
+        if (shouldAdoptAll || !gn.user_id || gn.user_id === GUEST_USER_ID || gn.user_id === 'undefined') {
           await saveLocalNote({ ...gn, user_id: user.id, updated_at: Date.now() });
         }
       }
@@ -64,14 +72,15 @@ export function NotesProvider({ children }) {
     setNotes(localN);
 
     if (localN.length > 0) {
-      const activeExists = localN.some(n => n.id === activeNoteId);
+      const currentActiveId = activeNoteIdRef.current;
+      const activeExists = localN.some(n => n.id === currentActiveId);
       if (!activeExists) {
         setActiveNoteId(localN[0].id);
       }
     } else {
       setActiveNoteId(null);
     }
-  }, [user, activeNoteId]);
+  }, [user]);
 
   // Función de Sincronización
   const triggerSync = useCallback(async () => {
