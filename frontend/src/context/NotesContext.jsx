@@ -57,10 +57,15 @@ export function NotesProvider({ children }) {
     setFolders(localF);
     setNotes(localN);
 
-    if (localN.length > 0 && !activeNoteId) {
-      setActiveNoteId(localN[0].id);
+    if (localN.length > 0) {
+      const activeExists = localN.some(n => n.id === activeNoteId);
+      if (!activeExists) {
+        setActiveNoteId(localN[0].id);
+      }
+    } else {
+      setActiveNoteId(null);
     }
-  }, [user]);
+  }, [user, activeNoteId]);
 
   // Función de Sincronización
   const triggerSync = useCallback(async () => {
