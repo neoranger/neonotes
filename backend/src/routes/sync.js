@@ -13,6 +13,8 @@ router.post('/', (req, res) => {
   try {
     db.transaction(() => {
       // 1. Sincronizar Carpetas recibidas del cliente
+      const getFolderOwnerStmt = db.prepare('SELECT user_id FROM folders WHERE id = ?');
+      const getNoteOwnerStmt = db.prepare('SELECT user_id FROM notes WHERE id = ?');
       const upsertFolderStmt = db.prepare(`
         INSERT INTO folders (id, user_id, name, parent_id, color, created_at, updated_at, is_deleted)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -27,6 +29,8 @@ router.post('/', (req, res) => {
 
       for (const folder of localFolders) {
         if (!folder.id || !folder.name) continue;
+        const folderOwner = getFolderOwnerStmt.get(folder.id);
+        if (folderOwner && folderOwner.user_id !== userId) continue;
         upsertFolderStmt.run(
           folder.id,
           userId,
@@ -56,6 +60,8 @@ router.post('/', (req, res) => {
 
       for (const note of localNotes) {
         if (!note.id) continue;
+        const noteOwner = getNoteOwnerStmt.get(note.id);
+        if (noteOwner && noteOwner.user_id !== userId) continue;
         const tagsStr = typeof note.tags === 'string' ? note.tags : JSON.stringify(note.tags || []);
         upsertNoteStmt.run(
           note.id,

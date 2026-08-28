@@ -95,10 +95,10 @@ export default function AuthModal({ isOpen, onClose }) {
               <input
                 type="password"
                 required
-                minLength={6}
+                minLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="Mínimo 8 caracteres con letras y números"
                 style={{ width: '100%', paddingLeft: '2.2rem' }}
               />
               <Lock size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />

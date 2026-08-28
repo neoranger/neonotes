@@ -25,8 +25,21 @@ docker-compose up --build -d
 ```
 
 Acceso a la aplicación:
-- **Frontend (Web App)**: `http://localhost:4000`
+- **Frontend (Web App)**: `http://localhost:4500`
 - **Backend API**: `http://localhost:7000`
+
+### ⚠️ Configuración del secreto JWT (obligatorio en producción)
+
+El backend firma los tokens con `JWT_SECRET`. Para entornos de producción debes
+definirlo en un archivo `.env` (ya excluido del repo) antes de levantar los contenedores:
+
+```bash
+cp .env.example .env
+# Edita .env y genera un secreto fuerte:
+# openssl rand -base64 48
+```
+
+Si no se define, se usa un valor por defecto SOLO para desarrollo local (el backend mostrará una advertencia).
 
 ---
 

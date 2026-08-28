@@ -3,25 +3,30 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import db from '../db/database.js';
 import { authenticateToken, generateToken } from '../middleware/auth.js';
+import { authLimiter } from '../middleware/rateLimit.js';
 
 const router = express.Router();
 
 // Registro de usuario
-router.post('/register', async (req, res) => {
+router.post('/register', authLimiter, async (req, res) => {
   const { username, email, password } = req.body;
 
   if (!username || !email || !password) {
     return res.status(400).json({ error: 'Todos los campos son obligatorios' });
   }
 
-  if (password.length < 6) {
-    return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+  const passwordRules = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
+  if (!passwordRules.test(password)) {
+    return res.status(400).json({
+      error: 'La contraseña debe tener al menos 8 caracteres e incluir letras y números'
+    });
   }
 
   try {
     const existingUser = db.prepare('SELECT id FROM users WHERE username = ? OR email = ?').get(username, email);
     if (existingUser) {
-      return res.status(400).json({ error: 'El nombre de usuario o email ya existe' });
+      console.warn(`Intento de registro con usuario/email ya existente: ${username} / ${email}`);
+      return res.status(400).json({ error: 'El registro no se pudo completar' });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -49,7 +54,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Login de usuario
-router.post('/login', async (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {

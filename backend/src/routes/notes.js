@@ -8,7 +8,7 @@ router.use(authenticateToken);
 
 // Obtener todas las notas del usuario
 router.get('/', (req, res) => {
-  const notes = db.prepare('SELECT * FROM notes WHERE user_id = ? AND is_deleted = 0 ORDER BY updated_at DESC').all(req.user.id);
+  const notes = db.prepare('SELECT * FROM notes WHERE user_id = ? AND is_deleted = 0 ORDER BY is_pinned DESC, updated_at DESC').all(req.user.id);
   // Parse tags JSON string to array
   const formattedNotes = notes.map(note => ({
     ...note,
@@ -42,6 +42,11 @@ router.post('/', (req, res) => {
   const tagsStr = JSON.stringify(tags || []);
 
   try {
+    const existing = db.prepare('SELECT user_id FROM notes WHERE id = ?').get(id);
+    if (existing && existing.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'No tienes permiso para modificar esta nota' });
+    }
+
     db.prepare(`
       INSERT INTO notes (id, user_id, folder_id, title, content, tags, is_pinned, created_at, updated_at, is_deleted)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNotes } from '../context/NotesContext';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import {
   Bold,
   Italic,
@@ -27,14 +28,42 @@ export default function Editor() {
   const [localContent, setLocalContent] = useState('');
   const textareaRef = useRef(null);
   const debounceTimerRef = useRef(null);
-
-  // Sincronizar estado local cuando cambia la nota activa
+  const pendingRef = useRef(null);
+  const updateNoteRef = useRef(updateNote);
   useEffect(() => {
+    updateNoteRef.current = updateNote;
+  });
+
+  // Guardar de forma inmediata cualquier edición pendiente (debounce) antes de cambiar de nota
+  const flushPending = () => {
+    if (!pendingRef.current) return;
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    const { id, title, content } = pendingRef.current;
+    pendingRef.current = null;
+    updateNoteRef.current(id, { title, content });
+  };
+
+  // Sincronizar estado local cuando cambia la nota activa (flusheando lo pendiente de la anterior)
+  useEffect(() => {
+    flushPending();
     if (activeNote) {
       setLocalTitle(activeNote.title || '');
       setLocalContent(activeNote.content || '');
     }
   }, [activeNote?.id]);
+
+  // Flush de ediciones al cerrar pestaña o desmontar el componente
+  useEffect(() => {
+    const handleBeforeUnload = () => flushPending();
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      flushPending();
+    };
+  }, []);
 
   // Actualización diferida (Debounce) para evitar re-renders masivos del árbol global mientras se escribe
   const scheduleUpdate = (title, content) => {
@@ -42,8 +71,11 @@ export default function Editor() {
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
+    pendingRef.current = { id: activeNote.id, title, content };
     debounceTimerRef.current = setTimeout(() => {
-      updateNote(activeNote.id, { title, content });
+      pendingRef.current = null;
+      debounceTimerRef.current = null;
+      updateNoteRef.current(activeNote.id, { title, content });
     }, 400);
   };
 
@@ -120,10 +152,10 @@ export default function Editor() {
     URL.revokeObjectURL(url);
   };
 
-  // Renderizar sintaxis Markdown
+  // Renderizar sintaxis Markdown (sanitizada contra XSS)
   const getRenderedHTML = () => {
     try {
-      return { __html: marked.parse(localContent || '') };
+      return { __html: DOMPurify.sanitize(marked.parse(localContent || '')) };
     } catch (e) {
       return { __html: '<p style="color:red">Error renderizando Markdown</p>' };
     }

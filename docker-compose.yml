@@ -10,7 +10,7 @@ services:
     environment:
       - PORT=7000
       - DATA_DIR=/app/data
-      - JWT_SECRET=neonotes_production_jwt_secret_key_2026
+      - JWT_SECRET=${JWT_SECRET:-neonotes_local_dev_secret_only}
     volumes:
       - ./neonotes-data:/app/data
 

@@ -35,7 +35,9 @@ export async function apiRequest(endpoint, method = 'GET', data = null) {
     const res = await fetch(`${API_BASE}${endpoint}`, options);
     const result = await res.json();
     if (!res.ok) {
-      throw new Error(result.error || 'Error en la petición API');
+      const error = new Error(result.error || 'Error en la petición API');
+      error.status = res.status;
+      throw error;
     }
     return result;
   } catch (error) {

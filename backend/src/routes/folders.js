@@ -23,6 +23,11 @@ router.post('/', (req, res) => {
   const now = Date.now();
 
   try {
+    const existing = db.prepare('SELECT user_id FROM folders WHERE id = ?').get(id);
+    if (existing && existing.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'No tienes permiso para modificar esta carpeta' });
+    }
+
     db.prepare(`
       INSERT INTO folders (id, user_id, name, parent_id, color, created_at, updated_at, is_deleted)
       VALUES (?, ?, ?, ?, ?, ?, ?, 0)

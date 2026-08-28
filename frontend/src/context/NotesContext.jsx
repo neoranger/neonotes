@@ -44,23 +44,24 @@ export function NotesProvider({ children }) {
   // Carga inicial de datos desde IndexedDB
   const loadLocalData = useCallback(async () => {
     const targetId = user ? user.id : GUEST_USER_ID;
-    
-    // Adopción inteligente: Si el usuario no tiene notas locales pero existen notas en este navegador, adoptarlas
+
+    // Adopción segura: solo datos huérfanos o del modo invitado se asignan al usuario actual.
+    // Nunca se adoptan registros pertenecientes a otra cuenta real en este navegador.
     if (user) {
       const db = await initLocalDB();
       const allFolders = await db.getAll('folders');
       const allNotes = await db.getAll('notes');
 
-      const userNotesExist = allNotes.some(n => n.user_id === user.id && !n.is_deleted);
-      const shouldAdoptAll = !userNotesExist && allNotes.length > 0;
+      const isOrphan = (item) =>
+        !item.user_id || item.user_id === GUEST_USER_ID || item.user_id === 'undefined' || item.user_id === 'null';
 
       for (const gf of allFolders) {
-        if (shouldAdoptAll || !gf.user_id || gf.user_id === GUEST_USER_ID || gf.user_id === 'undefined') {
+        if (isOrphan(gf)) {
           await saveLocalFolder({ ...gf, user_id: user.id, updated_at: Date.now() });
         }
       }
       for (const gn of allNotes) {
-        if (shouldAdoptAll || !gn.user_id || gn.user_id === GUEST_USER_ID || gn.user_id === 'undefined') {
+        if (isOrphan(gn)) {
           await saveLocalNote({ ...gn, user_id: user.id, updated_at: Date.now() });
         }
       }
@@ -213,15 +214,20 @@ export function NotesProvider({ children }) {
     if (user && navigator.onLine) triggerSync();
   };
 
-  // Filtrado de Notas por carpeta y búsqueda
-  const filteredNotes = notes.filter(note => {
-    if (note.is_deleted) return false;
-    const matchesFolder = activeFolderId === null || note.folder_id === activeFolderId;
-    const matchesSearch = searchQuery === '' ||
-      note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      note.content.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesFolder && matchesSearch;
-  });
+  // Filtrado de Notas por carpeta y búsqueda (fijadas primero, luego por actualización)
+  const filteredNotes = notes
+    .filter(note => {
+      if (note.is_deleted) return false;
+      const matchesFolder = activeFolderId === null || note.folder_id === activeFolderId;
+      const matchesSearch = searchQuery === '' ||
+        note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        note.content.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesFolder && matchesSearch;
+    })
+    .sort((a, b) => {
+      if (b.is_pinned !== a.is_pinned) return b.is_pinned - a.is_pinned;
+      return b.updated_at - a.updated_at;
+    });
 
   const activeNote = notes.find(n => n.id === activeNoteId && !n.is_deleted);
 

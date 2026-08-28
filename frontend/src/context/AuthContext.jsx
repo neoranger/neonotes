@@ -18,13 +18,18 @@ export function AuthProvider({ children }) {
         const res = await apiRequest('/auth/me');
         setUser(res.user);
       } catch (err) {
-        console.warn('Token invalido o servidor inalcanzable:', err.message);
-        // Si no hay red, mantener credenciales guardadas si existen en localStorage
-        const storedUser = localStorage.getItem('neonotes_cached_user');
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
-        } else {
+        if (err.status === 401 || err.status === 403) {
+          // Token explícitamente rechazado por el servidor: cerrar sesión
+          console.warn('Token inválido o expirado, cerrando sesión:', err.message);
           setAuthToken(null);
+          localStorage.removeItem('neonotes_cached_user');
+          setUser(null);
+        } else {
+          console.warn('Servidor inalcanzable, manteniendo sesión en modo offline:', err.message);
+          const storedUser = localStorage.getItem('neonotes_cached_user');
+          if (storedUser) {
+            setUser(JSON.parse(storedUser));
+          }
         }
       } finally {
         setLoading(false);

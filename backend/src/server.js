@@ -5,6 +5,7 @@ import authRoutes from './routes/auth.js';
 import folderRoutes from './routes/folders.js';
 import noteRoutes from './routes/notes.js';
 import syncRoutes from './routes/sync.js';
+import { apiLimiter } from './middleware/rateLimit.js';
 
 dotenv.config();
 
@@ -19,6 +20,9 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '10mb' }));
+
+// Limiter global para toda la API
+app.use('/api', apiLimiter);
 
 // Rutas API
 app.use('/api/auth', authRoutes);
