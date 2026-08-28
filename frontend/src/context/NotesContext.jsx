@@ -40,15 +40,21 @@ export function NotesProvider({ children }) {
   const loadLocalData = useCallback(async () => {
     const targetId = user ? user.id : GUEST_USER_ID;
     
-    // Migrar elementos locales creados en modo invitado al usuario recién autenticado
+    // Migrar elementos locales creados en modo invitado o sin asignación al usuario autenticado
     if (user) {
-      const guestFolders = await getLocalFolders(GUEST_USER_ID);
-      for (const gf of guestFolders) {
-        await saveLocalFolder({ ...gf, user_id: user.id, updated_at: Date.now() });
+      const db = await initLocalDB();
+      const allFolders = await db.getAll('folders');
+      const allNotes = await db.getAll('notes');
+
+      for (const gf of allFolders) {
+        if (!gf.user_id || gf.user_id === GUEST_USER_ID || gf.user_id === 'undefined') {
+          await saveLocalFolder({ ...gf, user_id: user.id, updated_at: Date.now() });
+        }
       }
-      const guestNotes = await getLocalNotes(GUEST_USER_ID);
-      for (const gn of guestNotes) {
-        await saveLocalNote({ ...gn, user_id: user.id, updated_at: Date.now() });
+      for (const gn of allNotes) {
+        if (!gn.user_id || gn.user_id === GUEST_USER_ID || gn.user_id === 'undefined') {
+          await saveLocalNote({ ...gn, user_id: user.id, updated_at: Date.now() });
+        }
       }
     }
 
