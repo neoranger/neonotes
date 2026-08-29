@@ -78,16 +78,18 @@ router.post('/', (req, res) => {
       }
     })();
 
-    // 3. Obtener cambios del servidor ocurridos desde `lastSyncTimestamp`
-    const serverFolders = db.prepare(`
-      SELECT * FROM folders
-      WHERE user_id = ? AND updated_at > ?
-    `).all(userId, lastSyncTimestamp);
+    // 3. Obtener cambios del servidor para el usuario.
+    // Devuelve los registros actualizados desde `lastSyncTimestamp` y además los que el cliente
+    // no tiene por ID, para que una nota creada en otro dispositivo llegue aunque su `updated_at`
+    // (definido por el reloj del cliente) quede por debajo del `lastSyncTimestamp` local.
+    const clientFolderIds = new Set(localFolders.filter(f => f.id).map(f => f.id));
+    const clientNoteIds = new Set(localNotes.filter(n => n.id).map(n => n.id));
 
-    const serverNotes = db.prepare(`
-      SELECT * FROM notes
-      WHERE user_id = ? AND updated_at > ?
-    `).all(userId, lastSyncTimestamp);
+    const serverFolders = db.prepare('SELECT * FROM folders WHERE user_id = ?').all(userId)
+      .filter(f => f.updated_at > lastSyncTimestamp || !clientFolderIds.has(f.id));
+
+    const serverNotes = db.prepare('SELECT * FROM notes WHERE user_id = ?').all(userId)
+      .filter(n => n.updated_at > lastSyncTimestamp || !clientNoteIds.has(n.id));
 
     const formattedServerNotes = serverNotes.map(n => ({
       ...n,

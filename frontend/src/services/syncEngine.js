@@ -51,7 +51,7 @@ export async function performSync(userId) {
     const userNotes = localNotes.filter(n => n.user_id === userId);
 
     // 3. Enviar a la API de sincronización
-    const syncResult = await apiRequest('/api/sync', 'POST', {
+    const syncResult = await apiRequest('/sync', 'POST', {
       lastSyncTimestamp,
       localFolders: userFolders,
       localNotes: userNotes
