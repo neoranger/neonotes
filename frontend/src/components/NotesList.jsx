@@ -1,10 +1,8 @@
 import React from 'react';
 import { useNotes } from '../context/NotesContext';
-import { useAuth } from '../context/AuthContext';
 import { Search, Plus, Pin, FileText } from 'lucide-react';
 
-export default function NotesList({ onOpenAuth }) {
-  const { user } = useAuth();
+export default function NotesList({ onOpenNote }) {
   const {
     notes,
     activeFolderId,
@@ -20,7 +18,9 @@ export default function NotesList({ onOpenAuth }) {
   const folderTitle = currentFolder ? currentFolder.name : 'Todas las Notas';
 
   const handleCreateNote = () => {
-    createNote('Nueva Nota Markdown', '# Título de la nota\n\nComienza a escribir en Markdown aquí...', activeFolderId);
+    createNote('Nueva Nota Markdown', '# Título de la nota\n\nComienza a escribir en Markdown aquí...', activeFolderId)
+      .then(() => { if (onOpenNote) onOpenNote(); })
+      .catch(() => {});
   };
 
   const formatDate = (timestamp) => {
@@ -64,7 +64,10 @@ export default function NotesList({ onOpenAuth }) {
               <div
                 key={note.id}
                 className={`note-card ${isActive ? 'active' : ''}`}
-                onClick={() => setActiveNoteId(note.id)}
+                onClick={() => {
+                  setActiveNoteId(note.id);
+                  if (onOpenNote) onOpenNote();
+                }}
               >
                 <div className="note-card-title">
                   <span>{note.title || 'Sin título'}</span>

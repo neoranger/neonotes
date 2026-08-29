@@ -34,11 +34,13 @@ router.get('/:id', (req, res) => {
   });
 });
 
-// Crear o actualizar nota (soporta client-provided ID para offline sync)
+// Crear o actualizar nota (soporta client-provided ID + timestamps para migración)
 router.post('/', (req, res) => {
-  const { id: clientProvidedId, folder_id, title, content, tags, is_pinned } = req.body;
+  const { id: clientProvidedId, folder_id, title, content, tags, is_pinned, created_at, updated_at } = req.body;
   const id = clientProvidedId || crypto.randomUUID();
   const now = Date.now();
+  const createdAt = Number.isFinite(created_at) ? created_at : now;
+  const updatedAt = Number.isFinite(updated_at) ? updated_at : now;
   const tagsStr = JSON.stringify(tags || []);
 
   try {
@@ -66,8 +68,8 @@ router.post('/', (req, res) => {
       content || '',
       tagsStr,
       is_pinned ? 1 : 0,
-      now,
-      now
+      createdAt,
+      updatedAt
     );
 
     const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(id);

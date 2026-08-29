@@ -23,7 +23,9 @@ import {
 
 export default function Editor() {
   const { activeNote, updateNote, deleteNote, folders } = useNotes();
-  const [viewMode, setViewMode] = useState('split'); // 'split' | 'edit' | 'preview'
+  const [viewMode, setViewMode] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches ? 'edit' : 'split'
+  );
   const [localTitle, setLocalTitle] = useState('');
   const [localContent, setLocalContent] = useState('');
   const textareaRef = useRef(null);

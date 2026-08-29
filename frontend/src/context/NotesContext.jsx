@@ -1,16 +1,23 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
-import { getLocalFolders, saveLocalFolder, getLocalNotes, saveLocalNote, initLocalDB } from '../services/db';
-import { performSync } from '../services/syncEngine';
-import { generateUUID } from '../utils/uuid';
+import { apiRequest } from '../services/api';
+import { runLegacyImport } from '../services/migrateLegacy';
 
 const NotesContext = createContext();
-const GUEST_USER_ID = 'guest_local_user';
+
+const sortNotes = (list) =>
+  [...list].sort((a, b) => {
+    const pa = a.is_pinned ? 1 : 0;
+    const pb = b.is_pinned ? 1 : 0;
+    if (pb !== pa) return pb - pa;
+    return (b.updated_at || 0) - (a.updated_at || 0);
+  });
 
 export function NotesProvider({ children }) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [folders, setFolders] = useState([]);
-  const [notes, setNotes] = useState([]);
+  const [allNotes, setAllNotes] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [activeFolderId, setActiveFolderId] = useState(null);
   const [activeNoteId, setActiveNoteId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -22,219 +29,199 @@ export function NotesProvider({ children }) {
     activeNoteIdRef.current = activeNoteId;
   }, [activeNoteId]);
 
-  const currentUserId = user ? user.id : GUEST_USER_ID;
+  const handleError = useCallback((err) => {
+    if (err.status === 401 || err.status === 403) {
+      logout();
+      return;
+    }
+    if (!err.status) {
+      setIsOnline(false);
+    }
+    setSyncStatus('error');
+    setTimeout(() => setSyncStatus((s) => (s === 'error' ? 'idle' : s)), 4000);
+  }, [logout]);
 
-  // Monitor de estado de conexión a red
+  const fetchData = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const [fRes, nRes] = await Promise.all([
+        apiRequest('/folders'),
+        apiRequest('/notes')
+      ]);
+      setIsOnline(true);
+      const serverFolders = fRes.folders || [];
+      const serverNotes = nRes.notes || [];
+      setFolders(serverFolders);
+      setAllNotes(sortNotes(serverNotes));
+      setActiveFolderId((prev) => (serverFolders.some((f) => f.id === prev) ? prev : null));
+      const currentActiveId = activeNoteIdRef.current;
+      const activeExists = serverNotes.some((n) => n.id === currentActiveId);
+      if (serverNotes.length > 0 && !activeExists) {
+        setActiveNoteId(serverNotes[0].id);
+      } else if (serverNotes.length === 0) {
+        setActiveNoteId(null);
+      }
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, handleError]);
+
+  useEffect(() => {
+    if (!user) {
+      setFolders([]);
+      setAllNotes([]);
+      setActiveNoteId(null);
+      setActiveFolderId(null);
+      setSyncStatus('idle');
+      return;
+    }
+    (async () => {
+      setLoading(true);
+      if (!localStorage.getItem('neonotes_legacy_imported_v1')) {
+        try {
+          const importedOk = await runLegacyImport(user.id);
+          if (importedOk) {
+            localStorage.setItem('neonotes_legacy_imported_v1', '1');
+          }
+        } catch (e) {
+          console.warn('Import de datos locales falló, se reintentará en el próximo inicio de sesión:', e.message);
+        }
+      }
+      await fetchData();
+      setLoading(false);
+    })();
+  }, [user]);
+
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      if (user) triggerSync();
+      if (user) fetchData();
     };
     const handleOffline = () => setIsOnline(false);
-
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [user]);
+  }, [user, fetchData]);
 
-  // Carga inicial de datos desde IndexedDB
-  const loadLocalData = useCallback(async () => {
-    const targetId = user ? user.id : GUEST_USER_ID;
-
-    // Adopción segura: solo datos huérfanos o del modo invitado se asignan al usuario actual.
-    // Nunca se adoptan registros pertenecientes a otra cuenta real en este navegador.
-    if (user) {
-      const db = await initLocalDB();
-      const allFolders = await db.getAll('folders');
-      const allNotes = await db.getAll('notes');
-
-      const isOrphan = (item) =>
-        !item.user_id || item.user_id === GUEST_USER_ID || item.user_id === 'undefined' || item.user_id === 'null';
-
-      for (const gf of allFolders) {
-        if (isOrphan(gf)) {
-          await saveLocalFolder({ ...gf, user_id: user.id, updated_at: Date.now() });
-        }
-      }
-      for (const gn of allNotes) {
-        if (isOrphan(gn)) {
-          await saveLocalNote({ ...gn, user_id: user.id, updated_at: Date.now() });
-        }
-      }
-    }
-
-    const localF = await getLocalFolders(targetId);
-    const localN = await getLocalNotes(targetId);
-    setFolders(localF);
-    setNotes(localN);
-
-    if (localN.length > 0) {
-      const currentActiveId = activeNoteIdRef.current;
-      const activeExists = localN.some(n => n.id === currentActiveId);
-      if (!activeExists) {
-        setActiveNoteId(localN[0].id);
-      }
-    } else {
-      setActiveNoteId(null);
-    }
-  }, [user]);
-
-  // Función de Sincronización
-  const triggerSync = useCallback(async () => {
-    if (!user || !navigator.onLine) return;
-    setSyncStatus('syncing');
-    const result = await performSync(user.id);
-    if (result.success) {
-      setSyncStatus('success');
-      await loadLocalData();
-      setTimeout(() => setSyncStatus('idle'), 3000);
-    } else {
-      setSyncStatus('error');
-      setTimeout(() => setSyncStatus('idle'), 4000);
-    }
-  }, [user, loadLocalData]);
-
-  // Inicializar datos cuando el usuario cambia
-  useEffect(() => {
-    loadLocalData().then(() => {
-      if (user && navigator.onLine) {
-        triggerSync();
-      }
-    });
-  }, [user, loadLocalData, triggerSync]);
-
-  // Operaciones de Carpetas
   const createFolder = async (name, parentId = null, color = '#6366f1') => {
-    const newFolder = {
-      id: generateUUID(),
-      user_id: currentUserId,
-      name,
-      parent_id: parentId,
-      color,
-      created_at: Date.now(),
-      updated_at: Date.now(),
-      is_deleted: false
-    };
-
-    await saveLocalFolder(newFolder);
-    setFolders(prev => [...prev, newFolder]);
-    setActiveFolderId(newFolder.id);
-
-    if (user && navigator.onLine) triggerSync();
+    if (!user) return null;
+    setSyncStatus('syncing');
+    try {
+      const res = await apiRequest('/folders', 'POST', { name, parent_id: parentId, color });
+      const folder = res.folder;
+      setFolders((prev) => [...prev, folder]);
+      setActiveFolderId(folder.id);
+      setSyncStatus('idle');
+      return folder;
+    } catch (err) {
+      handleError(err);
+      return null;
+    }
   };
 
   const deleteFolder = async (folderId) => {
-    const folder = folders.find(f => f.id === folderId);
-    if (!folder) return;
-
-    const updatedFolder = { ...folder, is_deleted: true, updated_at: Date.now() };
-    await saveLocalFolder(updatedFolder);
-
-    // Mover notas de la carpeta eliminada a la raíz
-    const affectedNotes = notes.filter(n => n.folder_id === folderId);
-    for (const note of affectedNotes) {
-      const updatedNote = { ...note, folder_id: null, updated_at: Date.now() };
-      await saveLocalNote(updatedNote);
+    if (!user) return;
+    setSyncStatus('syncing');
+    try {
+      await apiRequest(`/folders/${folderId}`, 'DELETE');
+      setFolders((prev) => prev.filter((f) => f.id !== folderId));
+      setAllNotes((prev) => prev.map((n) => (n.folder_id === folderId ? { ...n, folder_id: null } : n)));
+      if (activeFolderId === folderId) setActiveFolderId(null);
+      setSyncStatus('idle');
+    } catch (err) {
+      handleError(err);
     }
-
-    setFolders(prev => prev.filter(f => f.id !== folderId));
-    setNotes(prev => prev.map(n => (n.folder_id === folderId ? { ...n, folder_id: null } : n)));
-    if (activeFolderId === folderId) setActiveFolderId(null);
-
-    if (user && navigator.onLine) triggerSync();
   };
 
-  // Operaciones de Notas
   const createNote = async (title = 'Nueva Nota', content = '', folderId = activeFolderId) => {
-    const newNote = {
-      id: generateUUID(),
-      user_id: currentUserId,
-      folder_id: folderId,
-      title,
-      content,
-      tags: [],
-      is_pinned: false,
-      created_at: Date.now(),
-      updated_at: Date.now(),
-      is_deleted: false
-    };
-
-    await saveLocalNote(newNote);
-    setNotes(prev => [newNote, ...prev]);
-    setActiveNoteId(newNote.id);
-
-    if (user && navigator.onLine) triggerSync();
-    return newNote;
+    if (!user) return null;
+    setSyncStatus('syncing');
+    try {
+      const res = await apiRequest('/notes', 'POST', {
+        title,
+        content,
+        folder_id: folderId || null,
+        tags: [],
+        is_pinned: false
+      });
+      const note = res.note;
+      setAllNotes((prev) => sortNotes([note, ...prev]));
+      setActiveNoteId(note.id);
+      setSyncStatus('idle');
+      return note;
+    } catch (err) {
+      handleError(err);
+      return null;
+    }
   };
-
-  // Timer para diferir la sincronización de red en segundo plano
-  const debouncedSyncRef = useRef(null);
-  const scheduleSync = useCallback(() => {
-    if (!user || !navigator.onLine) return;
-    if (debouncedSyncRef.current) clearTimeout(debouncedSyncRef.current);
-    debouncedSyncRef.current = setTimeout(() => {
-      triggerSync();
-    }, 2500);
-  }, [user, triggerSync]);
 
   const updateNote = async (noteId, updates) => {
-    const existing = notes.find(n => n.id === noteId);
+    if (!user) return;
+    const existing = allNotes.find((n) => n.id === noteId);
     if (!existing) return;
 
-    const updatedNote = {
-      ...existing,
-      ...updates,
-      updated_at: Date.now()
-    };
+    const optimistic = { ...existing, ...updates, updated_at: Date.now() };
+    setAllNotes((prev) => sortNotes(prev.map((n) => (n.id === noteId ? optimistic : n))));
+    setSyncStatus('syncing');
 
-    await saveLocalNote(updatedNote);
-    setNotes(prev => prev.map(n => (n.id === noteId ? updatedNote : n)));
-
-    scheduleSync();
+    try {
+      const res = await apiRequest(`/notes/${noteId}`, 'PUT', updates);
+      const serverNote = res.note;
+      setAllNotes((prev) => sortNotes(prev.map((n) => (n.id === noteId ? serverNote : n))));
+      setSyncStatus('idle');
+    } catch (err) {
+      setAllNotes((prev) => sortNotes(prev.map((n) => (n.id === noteId ? existing : n))));
+      handleError(err);
+    }
   };
 
   const deleteNote = async (noteId) => {
-    const existing = notes.find(n => n.id === noteId);
-    if (!existing) return;
-
-    const updatedNote = { ...existing, is_deleted: true, updated_at: Date.now() };
-    await saveLocalNote(updatedNote);
-
-    const remainingNotes = notes.filter(n => n.id !== noteId);
-    setNotes(remainingNotes);
-
+    if (!user) return;
+    const existing = allNotes.find((n) => n.id === noteId);
+    const remaining = allNotes.filter((n) => n.id !== noteId);
+    setAllNotes(remaining);
     if (activeNoteId === noteId) {
-      setActiveNoteId(remainingNotes.length > 0 ? remainingNotes[0].id : null);
+      setActiveNoteId(remaining.length > 0 ? remaining[0].id : null);
     }
-
-    if (user && navigator.onLine) triggerSync();
+    setSyncStatus('syncing');
+    try {
+      await apiRequest(`/notes/${noteId}`, 'DELETE');
+      setSyncStatus('idle');
+    } catch (err) {
+      if (existing) setAllNotes((prev) => sortNotes([existing, ...prev]));
+      handleError(err);
+    }
   };
 
-  // Filtrado de Notas por carpeta y búsqueda (fijadas primero, luego por actualización)
-  const filteredNotes = notes
-    .filter(note => {
-      if (note.is_deleted) return false;
+  const filteredNotes = allNotes
+    .filter((note) => {
       const matchesFolder = activeFolderId === null || note.folder_id === activeFolderId;
+      const q = searchQuery.toLowerCase();
       const matchesSearch = searchQuery === '' ||
-        note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        note.content.toLowerCase().includes(searchQuery.toLowerCase());
+        note.title.toLowerCase().includes(q) ||
+        note.content.toLowerCase().includes(q);
       return matchesFolder && matchesSearch;
     })
     .sort((a, b) => {
-      if (b.is_pinned !== a.is_pinned) return b.is_pinned - a.is_pinned;
-      return b.updated_at - a.updated_at;
+      const pa = a.is_pinned ? 1 : 0;
+      const pb = b.is_pinned ? 1 : 0;
+      if (pb !== pa) return pb - pa;
+      return (b.updated_at || 0) - (a.updated_at || 0);
     });
 
-  const activeNote = notes.find(n => n.id === activeNoteId && !n.is_deleted);
+  const activeNote = allNotes.find((n) => n.id === activeNoteId);
 
   return (
     <NotesContext.Provider value={{
       folders,
       notes: filteredNotes,
+      loading,
       activeFolderId,
       setActiveFolderId,
       activeNoteId,
@@ -244,7 +231,6 @@ export function NotesProvider({ children }) {
       setSearchQuery,
       isOnline,
       syncStatus,
-      triggerSync,
       createFolder,
       deleteFolder,
       createNote,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotes } from '../context/NotesContext';
 import { useTheme } from '../context/ThemeContext';
@@ -10,14 +10,10 @@ import {
   Sun,
   Moon,
   LogOut,
-  LogIn,
-  RefreshCw,
-  Trash2,
-  Cloud,
-  CloudOff
+  Trash2
 } from 'lucide-react';
 
-export default function Sidebar({ onOpenAuth, onOpenNewFolder }) {
+export default function Sidebar({ onOpenNewFolder }) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const {
@@ -26,13 +22,11 @@ export default function Sidebar({ onOpenAuth, onOpenNewFolder }) {
     setActiveFolderId,
     deleteFolder,
     isOnline,
-    syncStatus,
-    triggerSync
+    syncStatus
   } = useNotes();
 
   return (
     <aside className="sidebar">
-      {/* Header del Sidebar con Logo */}
       <div className="sidebar-header">
         <div className="brand-logo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -50,7 +44,6 @@ export default function Sidebar({ onOpenAuth, onOpenNewFolder }) {
         </button>
       </div>
 
-      {/* Árbol de Carpetas */}
       <div className="sidebar-section">
         <div className="sidebar-section-title">
           <span>Carpetas</span>
@@ -64,7 +57,6 @@ export default function Sidebar({ onOpenAuth, onOpenNewFolder }) {
         </div>
 
         <div className="folder-tree">
-          {/* Opción Todas las notas */}
           <div
             className={`folder-item ${activeFolderId === null ? 'active' : ''}`}
             onClick={() => setActiveFolderId(null)}
@@ -75,7 +67,6 @@ export default function Sidebar({ onOpenAuth, onOpenNewFolder }) {
             </div>
           </div>
 
-          {/* Lista de Carpetas del Usuario */}
           {folders.map((folder) => {
             const isActive = activeFolderId === folder.id;
             return (
@@ -109,43 +100,25 @@ export default function Sidebar({ onOpenAuth, onOpenNewFolder }) {
         </div>
       </div>
 
-      {/* Footer del Sidebar (Sync & User Controls) */}
       <div className="sidebar-footer">
-        {/* Badge de Estado de Sincronización */}
         <div className="sync-badge">
           <span className={`status-dot ${isOnline ? 'online' : 'offline'}`} />
-          <span>{isOnline ? (syncStatus === 'syncing' ? 'Sincronizando...' : 'Online') : 'Offline (Modo local)'}</span>
-          {isOnline && user && (
-            <button
-              className="toolbar-btn"
-              onClick={triggerSync}
-              title="Sincronizar ahora"
-              style={{ padding: 2, marginLeft: 'auto' }}
-            >
-              <RefreshCw size={14} className={syncStatus === 'syncing' ? 'spin' : ''} />
-            </button>
-          )}
+          <span>
+            {!isOnline ? 'Sin conexión' : syncStatus === 'syncing' ? 'Guardando...' : 'En línea'}
+          </span>
         </div>
 
-        {/* Usuario / Sesión */}
-        {user ? (
-          <div className="user-badge">
-            <div className="user-info">
-              <div className="avatar">
-                {user.username ? user.username[0].toUpperCase() : 'U'}
-              </div>
-              <div className="user-name">{user.username}</div>
+        <div className="user-badge">
+          <div className="user-info">
+            <div className="avatar">
+              {user && user.username ? user.username[0].toUpperCase() : 'U'}
             </div>
-            <button className="toolbar-btn" onClick={logout} title="Cerrar sesión">
-              <LogOut size={16} />
-            </button>
+            <div className="user-name">{user ? user.username : ''}</div>
           </div>
-        ) : (
-          <button className="btn-primary" onClick={onOpenAuth} style={{ width: '100%' }}>
-            <LogIn size={16} />
-            <span>Iniciar Sesión</span>
+          <button className="toolbar-btn" onClick={logout} title="Cerrar sesión">
+            <LogOut size={16} />
           </button>
-        )}
+        </div>
       </div>
     </aside>
   );

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { NotesProvider } from './context/NotesContext';
 
@@ -8,23 +8,56 @@ import NotesList from './components/NotesList';
 import Editor from './components/Editor';
 import AuthModal from './components/AuthModal';
 import FolderModal from './components/FolderModal';
+import MobileTabBar from './components/MobileTabBar';
+
+function LoginScreen({ offline, onRetry }) {
+  return (
+    <div className="auth-screen">
+      {offline && (
+        <div className="offline-banner">
+          <span>Sin conexión con el servidor. Esta aplicación requiere estar en línea.</span>
+          <button className="btn-primary" onClick={onRetry}>
+            Reintentar
+          </button>
+        </div>
+      )}
+      <AuthModal isOpen onClose={() => {}} />
+    </div>
+  );
+}
+
+function LoadingScreen() {
+  return (
+    <div className="app-loading">
+      <div className="spinner" />
+      <span>Cargando...</span>
+    </div>
+  );
+}
 
 function MainLayout() {
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const { user, loading, offline, retryAuth } = useAuth();
   const [isFolderOpen, setIsFolderOpen] = useState(false);
+  const [mobileTab, setMobileTab] = useState('notes');
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  if (!user) {
+    return <LoginScreen offline={offline} onRetry={retryAuth} />;
+  }
 
   return (
-    <div className="app-container">
-      <Sidebar
-        onOpenAuth={() => setIsAuthOpen(true)}
-        onOpenNewFolder={() => setIsFolderOpen(true)}
-      />
-      <NotesList onOpenAuth={() => setIsAuthOpen(true)} />
-      <Editor />
-
-      <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
-      <FolderModal isOpen={isFolderOpen} onClose={() => setIsFolderOpen(false)} />
-    </div>
+    <>
+      <div className={`app-container mobile-tab-${mobileTab}`}>
+        <Sidebar onOpenNewFolder={() => setIsFolderOpen(true)} />
+        <NotesList onOpenNote={() => setMobileTab('editor')} />
+        <Editor />
+        <FolderModal isOpen={isFolderOpen} onClose={() => setIsFolderOpen(false)} />
+      </div>
+      <MobileTabBar active={mobileTab} onChange={setMobileTab} />
+    </>
   );
 }
 

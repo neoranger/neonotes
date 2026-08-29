@@ -12,15 +12,17 @@ router.get('/', (req, res) => {
   res.json({ folders });
 });
 
-// Crear nueva carpeta
+// Crear nueva carpeta (soporta client-provided ID + timestamps para migración)
 router.post('/', (req, res) => {
-  const { name, parent_id, color, id: clientProvidedId } = req.body;
+  const { name, parent_id, color, id: clientProvidedId, created_at, updated_at } = req.body;
   if (!name || !name.trim()) {
     return res.status(400).json({ error: 'El nombre de la carpeta es requerido' });
   }
 
   const id = clientProvidedId || crypto.randomUUID();
   const now = Date.now();
+  const createdAt = Number.isFinite(created_at) ? created_at : now;
+  const updatedAt = Number.isFinite(updated_at) ? updated_at : now;
 
   try {
     const existing = db.prepare('SELECT user_id FROM folders WHERE id = ?').get(id);
@@ -37,7 +39,7 @@ router.post('/', (req, res) => {
         color = excluded.color,
         updated_at = excluded.updated_at,
         is_deleted = 0
-    `).run(id, req.user.id, name.trim(), parent_id || null, color || null, now, now);
+    `).run(id, req.user.id, name.trim(), parent_id || null, color || null, createdAt, updatedAt);
 
     const folder = db.prepare('SELECT * FROM folders WHERE id = ?').get(id);
     res.status(201).json({ folder });
