@@ -18,11 +18,12 @@ import {
   Pin,
   Trash2,
   Download,
-  Folder
+  Folder,
+  RefreshCw
 } from 'lucide-react';
 
 export default function Editor() {
-  const { activeNote, updateNote, deleteNote, folders } = useNotes();
+  const { activeNote, updateNote, deleteNote, folders, externallyUpdatedNoteId, clearExternalUpdate } = useNotes();
   const [viewMode, setViewMode] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches ? 'edit' : 'split'
   );
@@ -50,6 +51,7 @@ export default function Editor() {
 
   // Sincronizar estado local cuando cambia la nota activa (flusheando lo pendiente de la anterior)
   useEffect(() => {
+    clearExternalUpdate();
     flushPending();
     if (activeNote) {
       setLocalTitle(activeNote.title || '');
@@ -174,6 +176,21 @@ export default function Editor() {
           onChange={handleTitleChange}
           placeholder="Título de la nota..."
         />
+
+        {externallyUpdatedNoteId === activeNote.id && (
+          <button
+            className="external-update-pill"
+            onClick={() => {
+              setLocalTitle(activeNote.title || '');
+              setLocalContent(activeNote.content || '');
+              clearExternalUpdate();
+            }}
+            title="Esta nota cambió en otro dispositivo. Haz clic para cargar la versión más reciente."
+          >
+            <RefreshCw size={14} />
+            <span>Actualizada en otro dispositivo</span>
+          </button>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           {/* Selector de Carpeta */}

@@ -5,6 +5,7 @@ import authRoutes from './routes/auth.js';
 import folderRoutes from './routes/folders.js';
 import noteRoutes from './routes/notes.js';
 import syncRoutes from './routes/sync.js';
+import eventsRouter from './routes/events.js';
 import { apiLimiter } from './middleware/rateLimit.js';
 
 dotenv.config();
@@ -29,6 +30,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/folders', folderRoutes);
 app.use('/api/notes', noteRoutes);
 app.use('/api/sync', syncRoutes);
+app.use('/api/events', eventsRouter);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

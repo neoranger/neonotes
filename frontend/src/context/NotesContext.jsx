@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
-import { apiRequest } from '../services/api';
+import { apiRequest, getAuthToken } from '../services/api';
 import { runLegacyImport } from '../services/migrateLegacy';
 
 const NotesContext = createContext();
@@ -23,11 +23,23 @@ export function NotesProvider({ children }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [syncStatus, setSyncStatus] = useState('idle');
+  const [externallyUpdatedNoteId, setExternallyUpdatedNoteId] = useState(null);
 
   const activeNoteIdRef = useRef(activeNoteId);
   useEffect(() => {
     activeNoteIdRef.current = activeNoteId;
   }, [activeNoteId]);
+
+  const allNotesRef = useRef([]);
+  const fetchInFlightRef = useRef(false);
+  const lastLocalMutationRef = useRef(0);
+
+  const commitAllNotes = useCallback((compute) => {
+    const next = typeof compute === 'function' ? compute(allNotesRef.current) : compute;
+    const sorted = sortNotes(next);
+    allNotesRef.current = sorted;
+    setAllNotes(sorted);
+  }, []);
 
   const handleError = useCallback((err) => {
     if (err.status === 401 || err.status === 403) {
@@ -42,7 +54,8 @@ export function NotesProvider({ children }) {
   }, [logout]);
 
   const fetchData = useCallback(async () => {
-    if (!user) return;
+    if (!user || fetchInFlightRef.current) return;
+    fetchInFlightRef.current = true;
     setLoading(true);
     try {
       const [fRes, nRes] = await Promise.all([
@@ -53,7 +66,23 @@ export function NotesProvider({ children }) {
       const serverFolders = fRes.folders || [];
       const serverNotes = nRes.notes || [];
       setFolders(serverFolders);
-      setAllNotes(sortNotes(serverNotes));
+
+      const activeId = activeNoteIdRef.current;
+      const isLocal = Date.now() - lastLocalMutationRef.current < 1500;
+      if (activeId && !isLocal) {
+        const prevActive = allNotesRef.current.find((n) => n.id === activeId);
+        const newActive = serverNotes.find((n) => n.id === activeId);
+        if (prevActive && newActive && (
+          Number(prevActive.updated_at) !== Number(newActive.updated_at) ||
+          prevActive.title !== newActive.title ||
+          prevActive.content !== newActive.content
+        )) {
+          setExternallyUpdatedNoteId(activeId);
+        }
+      }
+
+      commitAllNotes(serverNotes);
+
       setActiveFolderId((prev) => (serverFolders.some((f) => f.id === prev) ? prev : null));
       const currentActiveId = activeNoteIdRef.current;
       const activeExists = serverNotes.some((n) => n.id === currentActiveId);
@@ -65,16 +94,19 @@ export function NotesProvider({ children }) {
     } catch (err) {
       handleError(err);
     } finally {
+      fetchInFlightRef.current = false;
       setLoading(false);
     }
-  }, [user, handleError]);
+  }, [user, handleError, commitAllNotes]);
 
+  // Carga inicial + migración única al cambiar de usuario
   useEffect(() => {
     if (!user) {
       setFolders([]);
-      setAllNotes([]);
+      commitAllNotes([]);
       setActiveNoteId(null);
       setActiveFolderId(null);
+      setExternallyUpdatedNoteId(null);
       setSyncStatus('idle');
       return;
     }
@@ -95,6 +127,7 @@ export function NotesProvider({ children }) {
     })();
   }, [user]);
 
+  // Estado online/offline
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
@@ -109,8 +142,48 @@ export function NotesProvider({ children }) {
     };
   }, [user, fetchData]);
 
+  // Sincronización automática en tiempo real (SSE) + polling de respaldo
+  useEffect(() => {
+    if (!user) return;
+    const token = getAuthToken();
+
+    const refreshIfStale = () => {
+      if (!navigator.onLine) return;
+      if (Date.now() - lastLocalMutationRef.current < 1500) return;
+      if (fetchInFlightRef.current) return;
+      fetchData();
+    };
+
+    let es = null;
+    if (token && typeof EventSource !== 'undefined') {
+      es = new EventSource('/api/events?token=' + encodeURIComponent(token));
+      es.addEventListener('data_changed', refreshIfStale);
+      es.onerror = () => {
+        if (!getAuthToken()) es.close();
+      };
+    }
+
+    const pollTimer = setInterval(() => {
+      if (document.visibilityState === 'visible') refreshIfStale();
+    }, 60000);
+
+    const onVisible = () => {
+      if (!document.hidden) refreshIfStale();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+
+    return () => {
+      if (es) es.close();
+      clearInterval(pollTimer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [user, fetchData]);
+
   const createFolder = async (name, parentId = null, color = '#6366f1') => {
     if (!user) return null;
+    lastLocalMutationRef.current = Date.now();
     setSyncStatus('syncing');
     try {
       const res = await apiRequest('/folders', 'POST', { name, parent_id: parentId, color });
@@ -127,11 +200,12 @@ export function NotesProvider({ children }) {
 
   const deleteFolder = async (folderId) => {
     if (!user) return;
+    lastLocalMutationRef.current = Date.now();
     setSyncStatus('syncing');
     try {
       await apiRequest(`/folders/${folderId}`, 'DELETE');
       setFolders((prev) => prev.filter((f) => f.id !== folderId));
-      setAllNotes((prev) => prev.map((n) => (n.folder_id === folderId ? { ...n, folder_id: null } : n)));
+      commitAllNotes((prev) => prev.map((n) => (n.folder_id === folderId ? { ...n, folder_id: null } : n)));
       if (activeFolderId === folderId) setActiveFolderId(null);
       setSyncStatus('idle');
     } catch (err) {
@@ -141,6 +215,7 @@ export function NotesProvider({ children }) {
 
   const createNote = async (title = 'Nueva Nota', content = '', folderId = activeFolderId) => {
     if (!user) return null;
+    lastLocalMutationRef.current = Date.now();
     setSyncStatus('syncing');
     try {
       const res = await apiRequest('/notes', 'POST', {
@@ -151,8 +226,9 @@ export function NotesProvider({ children }) {
         is_pinned: false
       });
       const note = res.note;
-      setAllNotes((prev) => sortNotes([note, ...prev]));
+      commitAllNotes((prev) => [note, ...prev]);
       setActiveNoteId(note.id);
+      setExternallyUpdatedNoteId(null);
       setSyncStatus('idle');
       return note;
     } catch (err) {
@@ -163,29 +239,31 @@ export function NotesProvider({ children }) {
 
   const updateNote = async (noteId, updates) => {
     if (!user) return;
-    const existing = allNotes.find((n) => n.id === noteId);
+    const existing = allNotesRef.current.find((n) => n.id === noteId);
     if (!existing) return;
 
     const optimistic = { ...existing, ...updates, updated_at: Date.now() };
-    setAllNotes((prev) => sortNotes(prev.map((n) => (n.id === noteId ? optimistic : n))));
+    commitAllNotes((prev) => prev.map((n) => (n.id === noteId ? optimistic : n)));
     setSyncStatus('syncing');
+    lastLocalMutationRef.current = Date.now();
 
     try {
       const res = await apiRequest(`/notes/${noteId}`, 'PUT', updates);
       const serverNote = res.note;
-      setAllNotes((prev) => sortNotes(prev.map((n) => (n.id === noteId ? serverNote : n))));
+      commitAllNotes((prev) => prev.map((n) => (n.id === noteId ? serverNote : n)));
       setSyncStatus('idle');
     } catch (err) {
-      setAllNotes((prev) => sortNotes(prev.map((n) => (n.id === noteId ? existing : n))));
+      commitAllNotes((prev) => prev.map((n) => (n.id === noteId ? existing : n)));
       handleError(err);
     }
   };
 
   const deleteNote = async (noteId) => {
     if (!user) return;
-    const existing = allNotes.find((n) => n.id === noteId);
-    const remaining = allNotes.filter((n) => n.id !== noteId);
-    setAllNotes(remaining);
+    lastLocalMutationRef.current = Date.now();
+    const existing = allNotesRef.current.find((n) => n.id === noteId);
+    const remaining = allNotesRef.current.filter((n) => n.id !== noteId);
+    commitAllNotes(remaining);
     if (activeNoteId === noteId) {
       setActiveNoteId(remaining.length > 0 ? remaining[0].id : null);
     }
@@ -194,7 +272,7 @@ export function NotesProvider({ children }) {
       await apiRequest(`/notes/${noteId}`, 'DELETE');
       setSyncStatus('idle');
     } catch (err) {
-      if (existing) setAllNotes((prev) => sortNotes([existing, ...prev]));
+      if (existing) commitAllNotes((prev) => [existing, ...prev]);
       handleError(err);
     }
   };
@@ -231,6 +309,8 @@ export function NotesProvider({ children }) {
       setSearchQuery,
       isOnline,
       syncStatus,
+      externallyUpdatedNoteId,
+      clearExternalUpdate: () => setExternallyUpdatedNoteId(null),
       createFolder,
       deleteFolder,
       createNote,

@@ -36,3 +36,11 @@ export function generateToken(user) {
     { expiresIn: '30d' }
   );
 }
+
+export function verifyToken(token) {
+  try {
+    return jwt.verify(token, ACTIVE_SECRET);
+  } catch (err) {
+    return null;
+  }
+}

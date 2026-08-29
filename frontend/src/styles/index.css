@@ -436,6 +436,26 @@ input:focus, textarea:focus, select:focus {
   box-shadow: none;
 }
 
+/* Botón Fijar Nota / pill de actualización externa */
+.external-update-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 999px;
+  background-color: rgba(99, 102, 241, 0.12);
+  border: 1px solid var(--accent-primary);
+  color: var(--accent-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  animation: fadeIn 0.25s ease;
+}
+
+.external-update-pill:hover {
+  background-color: rgba(99, 102, 241, 0.22);
+}
+
 /* Barra de Herramientas Markdown */
 .editor-toolbar {
   padding: 0.5rem 1.5rem;

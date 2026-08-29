@@ -2,6 +2,7 @@ import express from 'express';
 import crypto from 'crypto';
 import db from '../db/database.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { notifyUser } from '../realtime.js';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -42,6 +43,7 @@ router.post('/', (req, res) => {
     `).run(id, req.user.id, name.trim(), parent_id || null, color || null, createdAt, updatedAt);
 
     const folder = db.prepare('SELECT * FROM folders WHERE id = ?').get(id);
+    notifyUser(req.user.id, { type: 'data' });
     res.status(201).json({ folder });
   } catch (err) {
     console.error('Error al crear/actualizar carpeta:', err);
@@ -71,6 +73,7 @@ router.put('/:id', (req, res) => {
   `).run(newName, newParent, newColor, now, id, req.user.id);
 
   const updatedFolder = db.prepare('SELECT * FROM folders WHERE id = ?').get(id);
+  notifyUser(req.user.id, { type: 'data' });
   res.json({ folder: updatedFolder });
 });
 
@@ -90,6 +93,7 @@ router.delete('/:id', (req, res) => {
     db.prepare('UPDATE notes SET folder_id = NULL, updated_at = ? WHERE folder_id = ? AND user_id = ?').run(now, id, req.user.id);
   })();
 
+  notifyUser(req.user.id, { type: 'data' });
   res.json({ message: 'Carpeta eliminada', id });
 });
 

@@ -2,6 +2,7 @@ import express from 'express';
 import crypto from 'crypto';
 import db from '../db/database.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { notifyUser } from '../realtime.js';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -73,6 +74,7 @@ router.post('/', (req, res) => {
     );
 
     const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(id);
+    notifyUser(req.user.id, { type: 'data' });
     res.status(201).json({
       note: {
         ...note,
@@ -110,6 +112,7 @@ router.put('/:id', (req, res) => {
   `).run(updatedFolder, updatedTitle, updatedContent, updatedTags, updatedPinned, now, id, req.user.id);
 
   const updatedNote = db.prepare('SELECT * FROM notes WHERE id = ?').get(id);
+  notifyUser(req.user.id, { type: 'data' });
   res.json({
     note: {
       ...updatedNote,
@@ -130,6 +133,7 @@ router.delete('/:id', (req, res) => {
   }
 
   db.prepare('UPDATE notes SET is_deleted = 1, updated_at = ? WHERE id = ? AND user_id = ?').run(now, id, req.user.id);
+  notifyUser(req.user.id, { type: 'data' });
   res.json({ message: 'Nota eliminada', id });
 });
 
