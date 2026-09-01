@@ -118,8 +118,13 @@ export default function Editor() {
 
   if (!activeNote) {
     return (
-      <div className="editor-container" style={{ justifyContent: 'center', alignItems: 'center', color: 'var(--text-muted)' }}>
-        <p style={{ fontSize: '1.1rem' }}>Selecciona o crea una nota para comenzar a editar</p>
+      <div className="editor-container">
+        <div className="editor-empty">
+          <div className="empty-state-icon">
+            <Edit3 size={28} />
+          </div>
+          <p>Selecciona o crea una nota para comenzar a editar</p>
+        </div>
       </div>
     );
   }
@@ -192,14 +197,13 @@ export default function Editor() {
           </button>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="editor-actions">
           {/* Selector de Carpeta */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'var(--bg-card)', padding: '0.3rem 0.6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
-            <Folder size={14} style={{ color: 'var(--text-muted)' }} />
+          <div className="folder-select">
+            <Folder size={14} />
             <select
               value={activeNote.folder_id || ''}
               onChange={(e) => updateNote(activeNote.id, { folder_id: e.target.value || null })}
-              style={{ background: 'none', border: 'none', padding: 0, fontSize: '0.85rem' }}
             >
               <option value="">(Sin Carpeta)</option>
               {folders.map(f => (

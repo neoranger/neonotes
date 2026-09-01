@@ -23,8 +23,8 @@ export default function FolderModal({ isOpen, onClose }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="modal-header">
+          <h2 className="modal-title">
             <FolderPlus size={20} style={{ color: selectedColor }} />
             <span>Nueva Carpeta</span>
           </h2>
@@ -33,9 +33,9 @@ export default function FolderModal({ isOpen, onClose }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div>
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.3rem' }}>
+        <form onSubmit={handleSubmit} className="form-stack">
+          <div className="form-field">
+            <label className="form-label">
               Nombre de la Carpeta
             </label>
             <input
@@ -45,36 +45,27 @@ export default function FolderModal({ isOpen, onClose }) {
               value={folderName}
               onChange={(e) => setFolderName(e.target.value)}
               placeholder="Ej: Proyectos, Personal, Apuntes..."
-              style={{ width: '100%' }}
             />
           </div>
 
-          <div>
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
+          <div className="form-field">
+            <label className="form-label">
               Color Distintivo
             </label>
-            <div style={{ display: 'flex', gap: '0.6rem' }}>
+            <div className="color-swatches">
               {COLOR_OPTIONS.map((c) => (
                 <div
                   key={c}
                   onClick={() => setSelectedColor(c)}
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: '50%',
-                    backgroundColor: c,
-                    cursor: 'pointer',
-                    border: selectedColor === c ? '2px solid white' : 'none',
-                    boxShadow: selectedColor === c ? '0 0 10px ' + c : 'none',
-                    transform: selectedColor === c ? 'scale(1.15)' : 'scale(1)',
-                    transition: 'transform 0.15s ease'
-                  }}
+                  className={`color-swatch ${selectedColor === c ? 'selected' : ''}`}
+                  style={{ backgroundColor: c }}
+                  title={c}
                 />
               ))}
             </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
+          <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>
               Cancelar
             </button>

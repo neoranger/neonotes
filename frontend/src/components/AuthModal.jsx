@@ -35,8 +35,8 @@ export default function AuthModal({ isOpen, onClose }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.4rem' }}>
+        <div className="modal-header">
+          <h2 className="modal-title">
             {isLoginMode ? 'Iniciar Sesión' : 'Crear Cuenta'}
           </h2>
           <button className="toolbar-btn" onClick={onClose}>
@@ -45,79 +45,78 @@ export default function AuthModal({ isOpen, onClose }) {
         </div>
 
         {error && (
-          <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', padding: '0.6rem 0.8rem', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem' }}>
+          <div className="error-alert">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div>
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.3rem' }}>
+        <form onSubmit={handleSubmit} className="form-stack">
+          <div className="form-field">
+            <label className="form-label">
               Nombre de usuario o Email
             </label>
-            <div style={{ position: 'relative' }}>
+            <div className="input-wrap">
               <input
                 type="text"
                 required
+                className="with-icon"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Tu usuario o correo"
-                style={{ width: '100%', paddingLeft: '2.2rem' }}
               />
-              <User size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <User size={16} className="input-icon" />
             </div>
           </div>
 
           {!isLoginMode && (
-            <div>
-              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.3rem' }}>
+            <div className="form-field">
+              <label className="form-label">
                 Correo Electrónico
               </label>
-              <div style={{ position: 'relative' }}>
+              <div className="input-wrap">
                 <input
                   type="email"
                   required
+                  className="with-icon"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="usuario@ejemplo.com"
-                  style={{ width: '100%', paddingLeft: '2.2rem' }}
                 />
-                <Mail size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <Mail size={16} className="input-icon" />
               </div>
             </div>
           )}
 
-          <div>
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.3rem' }}>
+          <div className="form-field">
+            <label className="form-label">
               Contraseña
             </label>
-            <div style={{ position: 'relative' }}>
+            <div className="input-wrap">
               <input
                 type="password"
                 required
                 minLength={8}
+                className="with-icon"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Mínimo 8 caracteres con letras y números"
-                style={{ width: '100%', paddingLeft: '2.2rem' }}
               />
-              <Lock size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <Lock size={16} className="input-icon" />
             </div>
           </div>
 
-          <button type="submit" className="btn-primary" disabled={submitting} style={{ marginTop: '0.5rem' }}>
+          <button type="submit" className="btn-primary btn-block" disabled={submitting} style={{ marginTop: '0.5rem' }}>
             {submitting ? 'Procesando...' : isLoginMode ? 'Iniciar Sesión' : 'Registrarse'}
           </button>
         </form>
 
-        <div style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+        <div className="auth-switch">
           {isLoginMode ? '¿No tienes una cuenta? ' : '¿Ya tienes una cuenta? '}
           <button
             onClick={() => {
               setIsLoginMode(!isLoginMode);
               setError('');
             }}
-            style={{ color: 'var(--accent-primary)', fontWeight: 600, textDecoration: 'underline' }}
           >
             {isLoginMode ? 'Regístrate aquí' : 'Inicia sesión'}
           </button>

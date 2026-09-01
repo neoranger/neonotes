@@ -23,10 +23,16 @@ router.post('/register', authLimiter, async (req, res) => {
   }
 
   try {
-    const existingUser = db.prepare('SELECT id FROM users WHERE username = ? OR email = ?').get(username, email);
-    if (existingUser) {
-      console.warn(`Intento de registro con usuario/email ya existente: ${username} / ${email}`);
-      return res.status(400).json({ error: 'El registro no se pudo completar' });
+    const usernameTaken = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+    if (usernameTaken) {
+      console.warn(`Intento de registro con usuario ya existente: ${username}`);
+      return res.status(409).json({ error: 'El nombre de usuario ya está en uso' });
+    }
+
+    const emailTaken = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    if (emailTaken) {
+      console.warn(`Intento de registro con email ya existente: ${email}`);
+      return res.status(409).json({ error: 'El correo electrónico ya está registrado' });
     }
 
     const salt = await bcrypt.genSalt(10);

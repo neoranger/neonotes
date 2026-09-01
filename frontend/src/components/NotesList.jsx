@@ -32,9 +32,12 @@ export default function NotesList({ onOpenNote }) {
   return (
     <div className="notes-sidebar">
       <div className="notes-header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem' }}>{folderTitle}</h2>
-          <button className="btn-primary" onClick={handleCreateNote} style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
+        <div className="notes-header-row">
+          <div className="notes-title-wrap">
+            <h2 className="notes-title">{folderTitle}</h2>
+            <span className="notes-count">{notes.length}</span>
+          </div>
+          <button className="btn-primary" onClick={handleCreateNote}>
             <Plus size={16} />
             <span>Nota</span>
           </button>
@@ -53,9 +56,15 @@ export default function NotesList({ onOpenNote }) {
 
       <div className="notes-list">
         {notes.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-            <FileText size={32} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <FileText size={26} />
+            </div>
             <p>No se encontraron notas.</p>
+            <button className="btn-primary" onClick={handleCreateNote}>
+              <Plus size={15} />
+              Crear nota
+            </button>
           </div>
         ) : (
           notes.map((note) => {
@@ -71,7 +80,7 @@ export default function NotesList({ onOpenNote }) {
               >
                 <div className="note-card-title">
                   <span>{note.title || 'Sin título'}</span>
-                  {note.is_pinned && <Pin size={14} style={{ color: 'var(--accent-primary)', transform: 'rotate(45deg)' }} />}
+                  {note.is_pinned && <Pin size={14} className="pin-icon" />}
                 </div>
                 <div className="note-card-snippet">
                   {note.content.replace(/[#*`_~]/g, '') || 'Nota vacía...'}

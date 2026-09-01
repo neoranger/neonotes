@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import db from '../db/database.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -23,6 +24,10 @@ export function authenticateToken(req, res, next) {
   jwt.verify(token, ACTIVE_SECRET, (err, user) => {
     if (err) {
       return res.status(403).json({ error: 'Token inválido o expirado' });
+    }
+    const exists = db.prepare('SELECT id FROM users WHERE id = ?').get(user.id);
+    if (!exists) {
+      return res.status(401).json({ error: 'Acceso no autorizado: Usuario no encontrado' });
     }
     req.user = user;
     next();
