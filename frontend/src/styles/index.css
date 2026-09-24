@@ -712,6 +712,81 @@ input:focus, textarea:focus, select:focus {
   flex-shrink: 0;
 }
 
+/* Indicador de estado de guardado + botón Guardar */
+.save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: 0.35rem 0.7rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.save-status--saved {
+  color: var(--status-online);
+  border-color: rgba(52, 211, 153, 0.35);
+}
+
+.save-status--saving {
+  color: var(--accent-primary);
+  border-color: var(--border-active);
+}
+
+.save-status--dirty {
+  color: var(--status-offline);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.save-status--error {
+  color: var(--danger-fg);
+  border-color: rgba(239, 68, 68, 0.45);
+  background: var(--danger-bg);
+  padding: 0;
+}
+
+.save-status .spin {
+  animation: spin 0.9s linear infinite;
+}
+
+.save-status-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.7rem;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: inherit;
+}
+
+.save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-active);
+  background: var(--accent-subtle);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  transition: background-color var(--transition-fast), opacity var(--transition-fast);
+}
+
+.save-btn:hover:not(:disabled) {
+  background: var(--bg-active);
+}
+
+.save-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* Selector de carpeta dentro del editor */
 .folder-select {
   display: flex;

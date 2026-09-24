@@ -19,16 +19,22 @@ import {
   Trash2,
   Download,
   Folder,
-  RefreshCw
+  RefreshCw,
+  Save,
+  Check,
+  Loader2,
+  AlertTriangle,
+  PencilLine
 } from 'lucide-react';
 
 export default function Editor() {
-  const { activeNote, updateNote, deleteNote, folders, externallyUpdatedNoteId, clearExternalUpdate } = useNotes();
+  const { activeNote, updateNote, deleteNote, folders, externallyUpdatedNoteId, clearExternalUpdate, syncStatus, lastSavedAt, saveError, clearSaveError } = useNotes();
   const [viewMode, setViewMode] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches ? 'edit' : 'split'
   );
   const [localTitle, setLocalTitle] = useState('');
   const [localContent, setLocalContent] = useState('');
+  const [hasPending, setHasPending] = useState(false);
   const textareaRef = useRef(null);
   const debounceTimerRef = useRef(null);
   const pendingRef = useRef(null);
@@ -46,7 +52,13 @@ export default function Editor() {
     }
     const { id, title, content } = pendingRef.current;
     pendingRef.current = null;
+    setHasPending(false);
     updateNoteRef.current(id, { title, content });
+  };
+
+  const handleManualSave = () => {
+    clearSaveError?.();
+    flushPending();
   };
 
   // Sincronizar estado local cuando cambia la nota activa (flusheando lo pendiente de la anterior)
@@ -56,6 +68,7 @@ export default function Editor() {
     if (activeNote) {
       setLocalTitle(activeNote.title || '');
       setLocalContent(activeNote.content || '');
+      setHasPending(false);
     }
   }, [activeNote?.id]);
 
@@ -76,9 +89,11 @@ export default function Editor() {
       clearTimeout(debounceTimerRef.current);
     }
     pendingRef.current = { id: activeNote.id, title, content };
+    setHasPending(true);
     debounceTimerRef.current = setTimeout(() => {
       pendingRef.current = null;
       debounceTimerRef.current = null;
+      setHasPending(false);
       updateNoteRef.current(activeNote.id, { title, content });
     }, 400);
   };
@@ -96,7 +111,13 @@ export default function Editor() {
   };
 
   // Manejo de la tecla Tab en el editor para indentación limpia de código Markdown
+  // + Ctrl/Cmd+S para guardado manual inmediato
   const handleKeyDown = (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      handleManualSave();
+      return;
+    }
     if (e.key === 'Tab') {
       e.preventDefault();
       const textarea = textareaRef.current;
@@ -170,6 +191,16 @@ export default function Editor() {
     }
   };
 
+  // Estado de guardado derivado para el indicador visual
+  const saveState = saveError || syncStatus === 'error'
+    ? 'error'
+    : syncStatus === 'syncing'
+      ? 'saving'
+      : hasPending
+        ? 'dirty'
+        : 'saved';
+  const savedTime = lastSavedAt ? new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : null;
+
   return (
     <div className="editor-container">
       {/* Header del Editor */}
@@ -181,6 +212,18 @@ export default function Editor() {
           onChange={handleTitleChange}
           placeholder="Título de la nota..."
         />
+
+        {/* Indicador de estado de guardado */}
+        <div className={`save-status save-status--${saveState}`} title={saveError || (savedTime ? `Último guardado: ${savedTime}` : 'Sin cambios pendientes')}>
+          {saveState === 'saving' && (<><Loader2 size={13} className="spin" /><span>Guardando…</span></>)}
+          {saveState === 'dirty' && (<><PencilLine size={13} /><span>Sin guardar</span></>)}
+          {saveState === 'saved' && (<><Check size={13} /><span>{savedTime ? `Guardado ${savedTime}` : 'Guardado'}</span></>)}
+          {saveState === 'error' && (
+            <button className="save-status-retry" onClick={handleManualSave} title={saveError || 'Reintentar guardado'}>
+              <AlertTriangle size={13} /><span>Error al guardar · Reintentar</span>
+            </button>
+          )}
+        </div>
 
         {externallyUpdatedNoteId === activeNote.id && (
           <button
@@ -198,6 +241,17 @@ export default function Editor() {
         )}
 
         <div className="editor-actions">
+          {/* Guardado manual */}
+          <button
+            className="save-btn"
+            onClick={handleManualSave}
+            disabled={!hasPending}
+            title={hasPending ? 'Guardar ahora (Ctrl+S)' : 'Sin cambios pendientes'}
+          >
+            <Save size={14} />
+            <span>Guardar</span>
+          </button>
+
           {/* Selector de Carpeta */}
           <div className="folder-select">
             <Folder size={14} />

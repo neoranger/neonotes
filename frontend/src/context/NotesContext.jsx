@@ -23,6 +23,8 @@ export function NotesProvider({ children }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [syncStatus, setSyncStatus] = useState('idle');
+  const [lastSavedAt, setLastSavedAt] = useState(null);
+  const [saveError, setSaveError] = useState(null);
   const [externallyUpdatedNoteId, setExternallyUpdatedNoteId] = useState(null);
 
   const activeNoteIdRef = useRef(activeNoteId);
@@ -49,6 +51,7 @@ export function NotesProvider({ children }) {
     if (!err.status) {
       setIsOnline(false);
     }
+    setSaveError(err.message || 'Error al guardar');
     setSyncStatus('error');
     setTimeout(() => setSyncStatus((s) => (s === 'error' ? 'idle' : s)), 4000);
   }, [logout]);
@@ -217,6 +220,7 @@ export function NotesProvider({ children }) {
     if (!user) return null;
     lastLocalMutationRef.current = Date.now();
     setSyncStatus('syncing');
+    setSaveError(null);
     try {
       const res = await apiRequest('/notes', 'POST', {
         title,
@@ -230,6 +234,7 @@ export function NotesProvider({ children }) {
       setActiveNoteId(note.id);
       setExternallyUpdatedNoteId(null);
       setSyncStatus('idle');
+      setLastSavedAt(Date.now());
       return note;
     } catch (err) {
       handleError(err);
@@ -245,6 +250,7 @@ export function NotesProvider({ children }) {
     const optimistic = { ...existing, ...updates, updated_at: Date.now() };
     commitAllNotes((prev) => prev.map((n) => (n.id === noteId ? optimistic : n)));
     setSyncStatus('syncing');
+    setSaveError(null);
     lastLocalMutationRef.current = Date.now();
 
     try {
@@ -252,6 +258,7 @@ export function NotesProvider({ children }) {
       const serverNote = res.note;
       commitAllNotes((prev) => prev.map((n) => (n.id === noteId ? serverNote : n)));
       setSyncStatus('idle');
+      setLastSavedAt(Date.now());
     } catch (err) {
       commitAllNotes((prev) => prev.map((n) => (n.id === noteId ? existing : n)));
       handleError(err);
@@ -309,6 +316,9 @@ export function NotesProvider({ children }) {
       setSearchQuery,
       isOnline,
       syncStatus,
+      lastSavedAt,
+      saveError,
+      clearSaveError: () => { setSaveError(null); if (syncStatus === 'error') setSyncStatus('idle'); },
       externallyUpdatedNoteId,
       clearExternalUpdate: () => setExternallyUpdatedNoteId(null),
       createFolder,
